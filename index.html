@@ -22,9 +22,26 @@ function findRoute() {
     let source = document.getElementById("source").value;
     let destination = document.getElementById("destination").value;
 
-    // Temporary AI logic
-    let time = Math.floor(Math.random() * 30) + 10;
-    let cost = Math.floor(Math.random() * 100) + 50;
+    // Simple AI-based estimation
+
+let distance = (source.length + destination.length) * 10; // fake distance logic
+
+let time = Math.round(distance / 40); // assume 40 km/h avg speed
+
+let fuelPrice = 100; // ₹ per litre
+let mileage = 15; // km per litre
+
+let cost = Math.round((distance / mileage) * fuelPrice);
+
+// AI adjustment (traffic simulation)
+let hour = new Date().getHours();
+
+if (hour >= 8 && hour <= 11) {
+    time += 10; // morning traffic
+}
+if (hour >= 17 && hour <= 20) {
+    time += 15; // evening traffic
+}
 
     document.getElementById("result").innerHTML =
         "Fastest Route: " + time + " mins <br> Estimated Cost: ₹" + cost;
