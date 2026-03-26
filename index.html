@@ -1,52 +1,48 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Smart Route AI</title>
-</head>
-<body>
-
-<h1>AI Smart Route Finder</h1>
-
-<label>Source:</label>
-<input type="text" id="source"><br><br>
-
-<label>Destination:</label>
-<input type="text" id="destination"><br><br>
-
-<button onclick="findRoute()">Find Route</button>
-
-<h2 id="result"></h2>
-
 <script>
-function findRoute() {
+async function findRoute() {
     let source = document.getElementById("source").value;
     let destination = document.getElementById("destination").value;
 
-    // Simple AI-based estimation
+    if (!source || !destination) {
+        alert("Please enter both locations");
+        return;
+    }
 
-let distance = (source.length + destination.length) * 10; // fake distance logic
+    try {
+        // Convert place to coordinates
+        let srcRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
+        let srcData = await srcRes.json();
 
-let time = Math.round(distance / 40); // assume 40 km/h avg speed
+        let destRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${destination}`);
+        let destData = await destRes.json();
 
-let fuelPrice = 100; // ₹ per litre
-let mileage = 15; // km per litre
+        let srcLat = srcData[0].lat;
+        let srcLon = srcData[0].lon;
 
-let cost = Math.round((distance / mileage) * fuelPrice);
+        let destLat = destData[0].lat;
+        let destLon = destData[0].lon;
 
-// AI adjustment (traffic simulation)
-let hour = new Date().getHours();
+        // Get route data from OSRM
+        let routeRes = await fetch(
+            `https://router.project-osrm.org/route/v1/driving/${srcLon},${srcLat};${destLon},${destLat}?overview=false`
+        );
+        let routeData = await routeRes.json();
 
-if (hour >= 8 && hour <= 11) {
-    time += 10; // morning traffic
-}
-if (hour >= 17 && hour <= 20) {
-    time += 15; // evening traffic
-}
+        let distance = routeData.routes[0].distance / 1000; // km
+        let time = routeData.routes[0].duration / 60; // minutes
 
-    document.getElementById("result").innerHTML =
-        "Fastest Route: " + time + " mins <br> Estimated Cost: ₹" + cost;
+        // Cost calculation
+        let fuelPrice = 100;
+        let mileage = 15;
+        let cost = Math.round((distance / mileage) * fuelPrice);
+
+        document.getElementById("result").innerHTML =
+            `Distance: ${distance.toFixed(2)} km <br>
+             Time: ${time.toFixed(0)} mins <br>
+             Estimated Cost: ₹${cost}`;
+
+    } catch (error) {
+        document.getElementById("result").innerHTML = "Error fetching route data";
+    }
 }
 </script>
-
-</body>
-</html>
