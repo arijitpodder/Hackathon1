@@ -1,48 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Smart Route AI</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f5f7fa;
+    text-align: center;
+}
+
+.container {
+    background: white;
+    padding: 20px;
+    margin: 50px auto;
+    width: 400px;
+    border-radius: 10px;
+    box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+}
+
+input {
+    width: 90%;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+button {
+    padding: 10px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.result {
+    margin-top: 20px;
+    font-size: 18px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+    <h2>🚗 Smart Route AI</h2>
+
+    <input type="text" id="source" placeholder="Enter Source (City, PIN, State)">
+    <input type="text" id="destination" placeholder="Enter Destination">
+
+    <button onclick="findRoute()">Find Best Route</button>
+
+    <div class="result" id="result"></div>
+</div>
+
 <script>
 async function findRoute() {
     let source = document.getElementById("source").value;
     let destination = document.getElementById("destination").value;
 
-    if (!source || !destination) {
-        alert("Please enter both locations");
-        return;
-    }
-
     try {
-        // Convert place to coordinates
-        let srcRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
-        let srcData = await srcRes.json();
+        let src = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
+        let srcData = await src.json();
 
-        let destRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${destination}`);
-        let destData = await destRes.json();
+        let dest = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${destination}`);
+        let destData = await dest.json();
 
-        let srcLat = srcData[0].lat;
-        let srcLon = srcData[0].lon;
+        if (!srcData.length || !destData.length) {
+            document.getElementById("result").innerHTML = "Invalid location";
+            return;
+        }
 
-        let destLat = destData[0].lat;
-        let destLon = destData[0].lon;
+        let sLat = srcData[0].lat;
+        let sLon = srcData[0].lon;
+        let dLat = destData[0].lat;
+        let dLon = destData[0].lon;
 
-        // Get route data from OSRM
-        let routeRes = await fetch(
-            `https://router.project-osrm.org/route/v1/driving/${srcLon},${srcLat};${destLon},${destLat}?overview=false`
+        let route = await fetch(
+            `https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=false`
         );
-        let routeData = await routeRes.json();
 
-        let distance = routeData.routes[0].distance / 1000; // km
-        let time = routeData.routes[0].duration / 60; // minutes
+        let data = await route.json();
 
-        // Cost calculation
-        let fuelPrice = 100;
-        let mileage = 15;
-        let cost = Math.round((distance / mileage) * fuelPrice);
+        let distance = data.routes[0].distance / 1000;
+        let time = data.routes[0].duration / 60;
+
+        let cost = Math.round((distance / 15) * 100);
 
         document.getElementById("result").innerHTML =
-            `Distance: ${distance.toFixed(2)} km <br>
-             Time: ${time.toFixed(0)} mins <br>
-             Estimated Cost: ₹${cost}`;
+            `📍 Distance: ${distance.toFixed(1)} km <br>
+             ⏱ Time: ${time.toFixed(0)} mins <br>
+             💰 Cost: ₹${cost}`;
 
-    } catch (error) {
-        document.getElementById("result").innerHTML = "Error fetching route data";
+    } catch {
+        document.getElementById("result").innerHTML = "Error fetching data";
     }
 }
 </script>
+
+</body>
+</html>
