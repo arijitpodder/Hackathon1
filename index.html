@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Route AI</title>
+</head>
+<body>
+
+<h1>AI Smart Route Finder</h1>
+
+<label>Source:</label>
+<input type="text" id="source"><br><br>
+
+<label>Destination:</label>
+<input type="text" id="destination"><br><br>
+
+<button onclick="findRoute()">Find Route</button>
+
+<h2 id="result"></h2>
+
+<script>
+function findRoute() {
+    let source = document.getElementById("source").value;
+    let destination = document.getElementById("destination").value;
+
+    // Temporary AI logic
+    let time = Math.floor(Math.random() * 30) + 10;
+    let cost = Math.floor(Math.random() * 100) + 50;
+
+    document.getElementById("result").innerHTML =
+        "Fastest Route: " + time + " mins <br> Estimated Cost: ₹" + cost;
+}
+</script>
+
+</body>
+</html>
