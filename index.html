@@ -3,101 +3,147 @@
 <head>
 <title>Smart Route AI</title>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
 <style>
 body {
     font-family: Arial;
-    background: #f5f7fa;
-    text-align: center;
+    background: linear-gradient(to right, #667eea, #764ba2);
+    margin: 0;
 }
 
 .container {
     background: white;
+    width: 500px;
+    margin: 30px auto;
     padding: 20px;
-    margin: 50px auto;
-    width: 400px;
-    border-radius: 10px;
-    box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    text-align: center;
+    animation: fadeIn 1s ease-in;
 }
 
-input {
+input, select {
     width: 90%;
     padding: 10px;
-    margin: 10px;
+    margin: 8px;
     border-radius: 5px;
-    border: 1px solid #ccc;
 }
 
 button {
     padding: 10px 20px;
-    background: #007bff;
+    background: #667eea;
     color: white;
     border: none;
     border-radius: 5px;
     cursor: pointer;
 }
 
-.result {
+#map {
+    height: 300px;
     margin-top: 20px;
-    font-size: 18px;
+}
+
+@keyframes fadeIn {
+    from {opacity:0;}
+    to {opacity:1;}
 }
 </style>
-
 </head>
 
 <body>
 
 <div class="container">
-    <h2>🚗 Smart Route AI</h2>
+<h2>🚀 Smart Route AI</h2>
 
-    <input type="text" id="source" placeholder="Enter Source (City, PIN, State)">
-    <input type="text" id="destination" placeholder="Enter Destination">
+<input id="source" placeholder="City / PIN / State">
+<input id="destination" placeholder="City / PIN / State">
 
-    <button onclick="findRoute()">Find Best Route</button>
+<select id="mode">
+    <option value="car">🚗 Car</option>
+    <option value="train">🚆 Train</option>
+    <option value="flight">✈️ Flight</option>
+</select>
 
-    <div class="result" id="result"></div>
+<button onclick="findRoute()">Find Route</button>
+
+<div id="result"></div>
+<div id="map"></div>
+
 </div>
 
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <script>
+let map = L.map('map').setView([22.57, 88.36], 5);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
 async function findRoute() {
     let source = document.getElementById("source").value;
     let destination = document.getElementById("destination").value;
+    let mode = document.getElementById("mode").value;
 
     try {
-        let src = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
-        let srcData = await src.json();
+        let s = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
+        let sData = await s.json();
 
-        let dest = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${destination}`);
-        let destData = await dest.json();
+        let d = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${destination}`);
+        let dData = await d.json();
 
-        if (!srcData.length || !destData.length) {
+        if (!sData.length || !dData.length) {
             document.getElementById("result").innerHTML = "Invalid location";
             return;
         }
 
-        let sLat = srcData[0].lat;
-        let sLon = srcData[0].lon;
-        let dLat = destData[0].lat;
-        let dLon = destData[0].lon;
+        let sLat = sData[0].lat;
+        let sLon = sData[0].lon;
+        let dLat = dData[0].lat;
+        let dLon = dData[0].lon;
 
-        let route = await fetch(
-            `https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=false`
-        );
+        map.setView([sLat, sLon], 6);
 
-        let data = await route.json();
+        L.marker([sLat, sLon]).addTo(map);
+        L.marker([dLat, dLon]).addTo(map);
 
-        let distance = data.routes[0].distance / 1000;
-        let time = data.routes[0].duration / 60;
+        let distance = getDistance(sLat, sLon, dLat, dLon);
 
-        let cost = Math.round((distance / 15) * 100);
+        let time, cost;
+
+        if (mode === "car") {
+            time = distance / 50 * 60;
+            cost = (distance / 15) * 100;
+        }
+        else if (mode === "train") {
+            time = distance / 80 * 60;
+            cost = distance * 1;
+        }
+        else {
+            time = distance / 600 * 60;
+            cost = distance * 5;
+        }
 
         document.getElementById("result").innerHTML =
-            `📍 Distance: ${distance.toFixed(1)} km <br>
-             ⏱ Time: ${time.toFixed(0)} mins <br>
-             💰 Cost: ₹${cost}`;
+            `Distance: ${distance.toFixed(1)} km <br>
+             Time: ${time.toFixed(0)} mins <br>
+             Cost: ₹${Math.round(cost)}`;
 
     } catch {
         document.getElementById("result").innerHTML = "Error fetching data";
     }
+}
+
+function getDistance(lat1, lon1, lat2, lon2) {
+    let R = 6371;
+    let dLat = (lat2-lat1) * Math.PI/180;
+    let dLon = (lon2-lon1) * Math.PI/180;
+
+    let a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180) *
+            Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+
+    let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 </script>
 
