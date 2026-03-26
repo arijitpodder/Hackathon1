@@ -14,7 +14,7 @@ body {
 }
 
 .container {
-    width: 600px;
+    width: 650px;
     margin: 20px auto;
     padding: 20px;
     background: #1e293b;
@@ -22,11 +22,17 @@ body {
     animation: fadeIn 1s ease;
 }
 
+h3 {
+    text-align:left;
+    margin-left:20px;
+}
+
 input {
     width: 28%;
     padding: 10px;
     margin: 5px;
     border-radius: 5px;
+    border:none;
 }
 
 select, button {
@@ -39,6 +45,7 @@ button {
     background: #3b82f6;
     color:white;
     border:none;
+    cursor:pointer;
 }
 
 #map {
@@ -48,9 +55,10 @@ button {
 
 .card {
     background:#334155;
-    padding:10px;
+    padding:15px;
     margin:10px;
     border-radius:10px;
+    text-align:left;
 }
 
 @keyframes fadeIn {
@@ -65,16 +73,19 @@ button {
 <div class="container">
 <h2>🚀 Smart Route AI</h2>
 
-<!-- Structured Inputs -->
+<!-- ORIGIN -->
+<h3>📍 Origin</h3>
 <div>
 <input id="city1" placeholder="City">
-<input id="pin1" placeholder="PIN">
+<input id="pin1" placeholder="PIN Code">
 <input id="state1" placeholder="State">
 </div>
 
+<!-- DESTINATION -->
+<h3>🎯 Destination</h3>
 <div>
 <input id="city2" placeholder="City">
-<input id="pin2" placeholder="PIN">
+<input id="pin2" placeholder="PIN Code">
 <input id="state2" placeholder="State">
 </div>
 
@@ -96,6 +107,7 @@ button {
 
 <script>
 let map = L.map('map').setView([22.57, 88.36], 5);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 async function findRoute() {
@@ -118,57 +130,68 @@ let sData = await s.json();
 let d = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${dest}`);
 let dData = await d.json();
 
+if(!sData.length || !dData.length){
+document.getElementById("result").innerHTML="❌ Invalid Location";
+return;
+}
+
 let sLat = parseFloat(sData[0].lat);
 let sLon = parseFloat(sData[0].lon);
 let dLat = parseFloat(dData[0].lat);
 let dLon = parseFloat(dData[0].lon);
 
-// Clear map
-map.eachLayer(layer => {
-    if(layer instanceof L.Marker || layer instanceof L.Polyline) {
-        map.removeLayer(layer);
-    }
+// Clear old markers/lines
+map.eachLayer(layer=>{
+if(layer instanceof L.Marker || layer instanceof L.Polyline){
+map.removeLayer(layer);
+}
 });
 
-L.marker([sLat, sLon]).addTo(map);
-L.marker([dLat, dLon]).addTo(map);
+L.marker([sLat,sLon]).addTo(map);
+L.marker([dLat,dLon]).addTo(map);
 
-// Draw line
+// Draw route line
 let line = L.polyline([[sLat,sLon],[dLat,dLon]], {color:'cyan'}).addTo(map);
-
 map.fitBounds(line.getBounds());
 
-let distance = getDistance(sLat,sLon,dLat,dLon);
+// Distance logic
+let straightDistance = getDistance(sLat,sLon,dLat,dLon);
+
+let carDistance = straightDistance * 1.3;
+let trainDistance = straightDistance * 1.1;
+let flightDistance = straightDistance;
 
 let html = "";
 
-// Multiple Mode Comparison
+// CAR
 if(mode==="all" || mode==="car"){
-let time = distance/50*60;
-let cost = distance/15*100;
+let time = carDistance/50*60;
+let cost = (carDistance/15)*100;
 
 html += `<div class="card">🚗 Car<br>
-Distance: ${distance.toFixed(1)} km<br>
+Distance: ${carDistance.toFixed(1)} km<br>
 Time: ${time.toFixed(0)} mins<br>
 Cost: ₹${Math.round(cost)}</div>`;
 }
 
+// TRAIN
 if(mode==="all" || mode==="train"){
-let time = distance/80*60;
-let cost = distance*1;
+let time = trainDistance/80*60;
+let cost = trainDistance*1;
 
 html += `<div class="card">🚆 Train<br>
-Distance: ${distance.toFixed(1)} km<br>
+Distance: ${trainDistance.toFixed(1)} km<br>
 Time: ${time.toFixed(0)} mins<br>
 Cost: ₹${Math.round(cost)}</div>`;
 }
 
+// FLIGHT
 if(mode==="all" || mode==="flight"){
-let time = distance/600*60;
-let cost = distance*5;
+let time = flightDistance/600*60;
+let cost = flightDistance*5;
 
 html += `<div class="card">✈️ Flight<br>
-Distance: ${distance.toFixed(1)} km<br>
+Distance: ${flightDistance.toFixed(1)} km<br>
 Time: ${time.toFixed(0)} mins<br>
 Cost: ₹${Math.round(cost)}</div>`;
 }
@@ -176,10 +199,11 @@ Cost: ₹${Math.round(cost)}</div>`;
 document.getElementById("result").innerHTML = html;
 
 }catch{
-document.getElementById("result").innerHTML="Error fetching location";
+document.getElementById("result").innerHTML="⚠️ Error fetching data";
 }
 }
 
+// Haversine Formula
 function getDistance(lat1, lon1, lat2, lon2){
 let R=6371;
 let dLat=(lat2-lat1)*Math.PI/180;
