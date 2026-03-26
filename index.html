@@ -9,85 +9,68 @@
 body {
     margin:0;
     font-family: Arial;
-    background: #0f172a;
+    background:#0f172a;
     color:white;
 }
 
 .container {
-    width: 650px;
-    margin: 20px auto;
-    padding: 20px;
-    background: #1e293b;
-    border-radius: 15px;
-    animation: fadeIn 1s ease;
+    width:600px;
+    margin:20px auto;
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
 }
 
-h3 {
-    text-align:left;
-    margin-left:20px;
-}
-
-input {
-    width: 28%;
-    padding: 10px;
-    margin: 5px;
-    border-radius: 5px;
-    border:none;
-}
-
-select, button {
-    padding: 10px;
-    margin: 10px;
-    border-radius: 5px;
+input, select {
+    padding:10px;
+    margin:5px;
+    border-radius:5px;
 }
 
 button {
-    background: #3b82f6;
+    padding:10px;
+    background:#3b82f6;
     color:white;
     border:none;
-    cursor:pointer;
-}
-
-#map {
-    height: 350px;
-    margin-top: 15px;
+    border-radius:5px;
 }
 
 .card {
     background:#334155;
-    padding:15px;
+    padding:10px;
     margin:10px;
     border-radius:10px;
-    text-align:left;
 }
 
-@keyframes fadeIn {
-    from {opacity:0;}
-    to {opacity:1;}
-}
+#map { height:300px; }
 </style>
 </head>
 
 <body>
 
 <div class="container">
+
 <h2>🚀 Smart Route AI</h2>
 
-<!-- ORIGIN -->
-<h3>📍 Origin</h3>
-<div>
-<input id="city1" placeholder="City">
-<input id="pin1" placeholder="PIN Code">
-<input id="state1" placeholder="State">
+<!-- LOGIN -->
+<div id="loginDiv">
+<input id="username" placeholder="Enter Username">
+<button onclick="login()">Login</button>
 </div>
 
-<!-- DESTINATION -->
+<div id="app" style="display:none">
+
+<h3>📍 Origin</h3>
+<input id="city1" placeholder="City">
+<input id="pin1" placeholder="PIN">
+<input id="state1" placeholder="State">
+<input id="country1" placeholder="Country">
+
 <h3>🎯 Destination</h3>
-<div>
 <input id="city2" placeholder="City">
-<input id="pin2" placeholder="PIN Code">
+<input id="pin2" placeholder="PIN">
 <input id="state2" placeholder="State">
-</div>
+<input id="country2" placeholder="Country">
 
 <select id="mode">
 <option value="all">All Modes</option>
@@ -96,122 +79,214 @@ button {
 <option value="flight">Flight</option>
 </select>
 
-<button onclick="findRoute()">Find Routes</button>
+<button onclick="findRoute()">Find Route</button>
 
 <div id="result"></div>
 <div id="map"></div>
 
+<h3>⭐ Favorite Routes</h3>
+<div id="favorites"></div>
+
+<h3>🕒 History</h3>
+<div id="history"></div>
+
+</div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-let map = L.map('map').setView([22.57, 88.36], 5);
-
+let map = L.map('map').setView([22.57,88.36],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-async function findRoute() {
-
-let source = document.getElementById("city1").value + " " +
-             document.getElementById("pin1").value + " " +
-             document.getElementById("state1").value;
-
-let dest = document.getElementById("city2").value + " " +
-           document.getElementById("pin2").value + " " +
-           document.getElementById("state2").value;
-
-let mode = document.getElementById("mode").value;
-
-try {
-
-let s = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
-let sData = await s.json();
-
-let d = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${dest}`);
-let dData = await d.json();
-
-if(!sData.length || !dData.length){
-document.getElementById("result").innerHTML="❌ Invalid Location";
-return;
+// LOGIN SYSTEM
+function login(){
+let user=document.getElementById("username").value;
+localStorage.setItem("user",user);
+document.getElementById("loginDiv").style.display="none";
+document.getElementById("app").style.display="block";
 }
 
-let sLat = parseFloat(sData[0].lat);
-let sLon = parseFloat(sData[0].lon);
-let dLat = parseFloat(dData[0].lat);
-let dLon = parseFloat(dData[0].lon);
+if(localStorage.getItem("user")){
+document.getElementById("loginDiv").style.display="none";
+document.getElementById("app").style.display="block";
+}
 
-// Clear old markers/lines
-map.eachLayer(layer=>{
-if(layer instanceof L.Marker || layer instanceof L.Polyline){
-map.removeLayer(layer);
+// AUTOCOMPLETE
+function autocomplete(id){
+let input=document.getElementById(id);
+
+input.addEventListener("input", async function(){
+let val=this.value;
+if(val.length<3) return;
+
+let res=await fetch(`https://photon.komoot.io/api/?q=${val}`);
+let data=await res.json();
+
+let list=document.createElement("div");
+list.style.background="white";
+list.style.color="black";
+
+data.features.slice(0,5).forEach(p=>{
+let item=document.createElement("div");
+item.innerText=p.properties.name;
+item.onclick=()=>{
+input.value=p.properties.name;
+list.remove();
+};
+list.appendChild(item);
+});
+
+input.parentNode.appendChild(list);
+});
+}
+
+autocomplete("city1");
+autocomplete("city2");
+
+// MAIN FUNCTION
+async function findRoute(){
+
+let source = document.getElementById("city1").value + " " +
+document.getElementById("pin1").value + " " +
+document.getElementById("state1").value + " " +
+document.getElementById("country1").value;
+
+let dest = document.getElementById("city2").value + " " +
+document.getElementById("pin2").value + " " +
+document.getElementById("state2").value + " " +
+document.getElementById("country2").value;
+
+let mode=document.getElementById("mode").value;
+
+try{
+
+let s=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
+let sData=await s.json();
+
+let d=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${dest}`);
+let dData=await d.json();
+
+let sLat=parseFloat(sData[0].lat);
+let sLon=parseFloat(sData[0].lon);
+let dLat=parseFloat(dData[0].lat);
+let dLon=parseFloat(dData[0].lon);
+
+// CLEAR MAP
+map.eachLayer(l=>{
+if(l instanceof L.Marker || l instanceof L.Polyline){
+map.removeLayer(l);
 }
 });
 
 L.marker([sLat,sLon]).addTo(map);
 L.marker([dLat,dLon]).addTo(map);
 
-// Draw route line
-let line = L.polyline([[sLat,sLon],[dLat,dLon]], {color:'cyan'}).addTo(map);
-map.fitBounds(line.getBounds());
+// CURVED ROUTE
+let route=await fetch(`https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=full&geometries=geojson`);
+let data=await route.json();
 
-// Distance logic
-let straightDistance = getDistance(sLat,sLon,dLat,dLon);
+let coords=data.routes[0].geometry.coordinates;
+let latlngs=coords.map(c=>[c[1],c[0]]);
 
-let carDistance = straightDistance * 1.3;
-let trainDistance = straightDistance * 1.1;
-let flightDistance = straightDistance;
+L.polyline(latlngs,{color:'cyan'}).addTo(map);
+map.fitBounds(latlngs);
 
-let html = "";
+// DISTANCE
+let distance=getDistance(sLat,sLon,dLat,dLon);
 
-// CAR
-if(mode==="all" || mode==="car"){
-let time = carDistance/50*60;
-let cost = (carDistance/15)*100;
+// TRAFFIC SIMULATION
+let hour=new Date().getHours();
+let trafficFactor=1;
 
-html += `<div class="card">🚗 Car<br>
-Distance: ${carDistance.toFixed(1)} km<br>
-Time: ${time.toFixed(0)} mins<br>
-Cost: ₹${Math.round(cost)}</div>`;
+if(hour>=8 && hour<=11) trafficFactor=1.3;
+if(hour>=17 && hour<=21) trafficFactor=1.5;
+
+// SURGE PRICING
+let surge=trafficFactor;
+
+// RESULT
+let html="";
+
+function card(name,d,t,c){
+return `<div class="card">
+${name}<br>
+Distance: ${d.toFixed(1)} km<br>
+Time: ${t.toFixed(0)} mins<br>
+Cost: ₹${Math.round(c)}
+<button onclick='saveFav("${source}","${dest}")'>⭐</button>
+</div>`;
 }
 
-// TRAIN
-if(mode==="all" || mode==="train"){
-let time = trainDistance/80*60;
-let cost = trainDistance*1;
-
-html += `<div class="card">🚆 Train<br>
-Distance: ${trainDistance.toFixed(1)} km<br>
-Time: ${time.toFixed(0)} mins<br>
-Cost: ₹${Math.round(cost)}</div>`;
+if(mode==="all"||mode==="car"){
+let d=distance*1.3;
+let t=d/50*60*trafficFactor;
+let c=(d/15)*100*surge;
+html+=card("🚗 Car",d,t,c);
 }
 
-// FLIGHT
-if(mode==="all" || mode==="flight"){
-let time = flightDistance/600*60;
-let cost = flightDistance*5;
-
-html += `<div class="card">✈️ Flight<br>
-Distance: ${flightDistance.toFixed(1)} km<br>
-Time: ${time.toFixed(0)} mins<br>
-Cost: ₹${Math.round(cost)}</div>`;
+if(mode==="all"||mode==="train"){
+let d=distance*1.1;
+let t=d/80*60;
+let c=d*1;
+html+=card("🚆 Train",d,t,c);
 }
 
-document.getElementById("result").innerHTML = html;
+if(mode==="all"||mode==="flight"){
+let d=distance;
+let t=d/600*60;
+let c=d*5*surge;
+html+=card("✈️ Flight",d,t,c);
+}
+
+document.getElementById("result").innerHTML=html;
+
+// SAVE HISTORY
+let history=JSON.parse(localStorage.getItem("history"))||[];
+history.push({source,dest});
+localStorage.setItem("history",JSON.stringify(history));
+
+loadHistory();
+loadFav();
 
 }catch{
-document.getElementById("result").innerHTML="⚠️ Error fetching data";
+document.getElementById("result").innerHTML="Error";
 }
 }
 
-// Haversine Formula
-function getDistance(lat1, lon1, lat2, lon2){
+// FAVORITES
+function saveFav(s,d){
+let fav=JSON.parse(localStorage.getItem("fav"))||[];
+fav.push({s,d});
+localStorage.setItem("fav",JSON.stringify(fav));
+loadFav();
+}
+
+function loadFav(){
+let fav=JSON.parse(localStorage.getItem("fav"))||[];
+let html="";
+fav.forEach(f=>{
+html+=`<div class="card">${f.s} → ${f.d}</div>`;
+});
+document.getElementById("favorites").innerHTML=html;
+}
+
+// HISTORY
+function loadHistory(){
+let h=JSON.parse(localStorage.getItem("history"))||[];
+let html="";
+h.slice(-5).reverse().forEach(x=>{
+html+=`<div class="card">${x.source} → ${x.dest}</div>`;
+});
+document.getElementById("history").innerHTML=html;
+}
+
+function getDistance(lat1,lon1,lat2,lon2){
 let R=6371;
 let dLat=(lat2-lat1)*Math.PI/180;
 let dLon=(lon2-lon1)*Math.PI/180;
-
 let a=Math.sin(dLat/2)**2+
 Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-
 return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 </script>
