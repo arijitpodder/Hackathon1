@@ -20,7 +20,7 @@ body {
     padding:20px;
     border-radius:15px;
 }
-input, select {
+input {
     padding:10px;
     margin:5px;
     border-radius:5px;
@@ -90,7 +90,6 @@ canvas {
 
 <script>
 
-// MAP
 let map = L.map('map').setView([22.57,88.36],5);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -99,7 +98,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 
 setTimeout(()=>map.invalidateSize(),500);
 
-// DISTANCE
 function getDistance(lat1,lon1,lat2,lon2){
 let R=6371;
 let dLat=(lat2-lat1)*Math.PI/180;
@@ -109,15 +107,19 @@ Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
 return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// NEAREST STATION
 async function getStation(lat,lon){
 let res = await fetch(`https://overpass-api.de/api/interpreter?data=[out:json];node(around:5000,${lat},${lon})["railway"="station"];out;`);
 let data = await res.json();
 return data.elements.length>0 ? data.elements[0].tags.name : "Not Found";
 }
 
-// MAIN
 async function findRoute(){
+
+// 🔥 CLEAR OLD DATA
+document.getElementById("result").innerHTML = "";
+if(window.myChart){
+    window.myChart.destroy();
+}
 
 let source = `${city1.value} ${pin1.value} ${state1.value} ${country1.value}`;
 let dest = `${city2.value} ${pin2.value} ${state2.value} ${country2.value}`;
@@ -133,7 +135,7 @@ let sLon = +sData[0].lon;
 let dLat = +dData[0].lat;
 let dLon = +dData[0].lon;
 
-// MAP
+// MAP CLEAN
 map.eachLayer(l=>{
 if(l instanceof L.Marker || l instanceof L.Polyline){
 map.removeLayer(l);
@@ -161,14 +163,13 @@ let dstStation = await getStation(dLat,dLon);
 let hour=new Date().getHours();
 let traffic=(hour>=8&&hour<=11)||(hour>=17&&hour<=21)?1.4:1;
 
-// OPTIONS ARRAY
+// OPTIONS
 let options=[];
 
 // 🚗 CAR
 let carD=distance*1.3;
 let carT=(carD/45)*60*traffic;
 if(carT<25) carT=25;
-
 let carC=(carD*18)+100;
 options.push({name:"🚗 Car",d:carD,t:carT,c:carC});
 
@@ -176,18 +177,21 @@ options.push({name:"🚗 Car",d:carD,t:carT,c:carC});
 let trainD=distance*1.1;
 let trainT=(trainD/50)*60+20;
 if(trainD<80) trainT=60;
-
 let trainC=trainD<80 ? 15 : 50+(trainD*0.3);
 options.push({name:"🚆 Train",d:trainD,t:trainT,c:trainC});
 
-// ✈️ FLIGHT
-if(distance>200){
+// ✈️ FLIGHT ALWAYS SHOWN
+let flightAvailable = distance > 200;
+let flightData=null;
+
+if(flightAvailable){
 let flightT=(distance/600)*60+90;
 let flightC=2000+(distance*4);
-options.push({name:"✈️ Flight",d:distance,t:flightT,c:flightC});
+flightData={name:"✈️ Flight",d:distance,t:flightT,c:flightC};
+options.push(flightData);
 }
 
-// FIND BEST
+// BEST LOGIC
 let cheapest = Math.min(...options.map(o=>o.c));
 let fastest = Math.min(...options.map(o=>o.t));
 
@@ -215,10 +219,18 @@ costs.push(o.c);
 times.push(o.t);
 });
 
+// ALWAYS SHOW FLIGHT CARD
+if(!flightAvailable){
+html+=`<div class="card">
+✈️ Flight<br>
+❌ Not Available for short distance
+</div>`;
+}
+
 document.getElementById("result").innerHTML=html;
 
 // GRAPH
-new Chart(document.getElementById("chart"),{
+window.myChart = new Chart(document.getElementById("chart"),{
 type:'bar',
 data:{
 labels:labels,
@@ -230,6 +242,7 @@ datasets:[
 });
 
 }
+
 </script>
 
 </body>
