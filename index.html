@@ -52,10 +52,10 @@ button {
     margin-top:15px;
     border-radius:10px;
 }
-canvas {
-    background:white;
-    margin-top:20px;
-    border-radius:10px;
+.loading {
+    text-align:center;
+    margin:20px;
+    font-size:18px;
 }
 </style>
 </head>
@@ -66,14 +66,12 @@ canvas {
 
 <h2>🚀 Smart Route AI</h2>
 
-<h3>📍 Origin</h3>
-<input id="city1" placeholder="City">
+<input id="city1" placeholder="Origin City">
 <input id="pin1" placeholder="PIN">
 <input id="state1" placeholder="State">
 <input id="country1" placeholder="Country">
 
-<h3>🎯 Destination</h3>
-<input id="city2" placeholder="City">
+<input id="city2" placeholder="Destination City">
 <input id="pin2" placeholder="PIN">
 <input id="state2" placeholder="State">
 <input id="country2" placeholder="Country">
@@ -90,13 +88,12 @@ canvas {
 
 <script>
 
+// MAP
 let map = L.map('map').setView([22.57,88.36],5);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19
 }).addTo(map);
-
-setTimeout(()=>map.invalidateSize(),500);
 
 function getDistance(lat1,lon1,lat2,lon2){
 let R=6371;
@@ -107,35 +104,40 @@ Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
 return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+// FAST SAFE STATION FETCH
 async function getStation(lat,lon){
-let res = await fetch(`https://overpass-api.de/api/interpreter?data=[out:json];node(around:5000,${lat},${lon})["railway"="station"];out;`);
+try{
+let res = await fetch(`https://overpass-api.de/api/interpreter?data=[out:json];node(around:3000,${lat},${lon})["railway"="station"];out;`);
 let data = await res.json();
-return data.elements.length>0 ? data.elements[0].tags.name : "Not Found";
+return data.elements[0]?.tags?.name || "Nearby Station";
+}catch{
+return "Nearby Station";
+}
 }
 
 async function findRoute(){
 
-// 🔥 CLEAR OLD DATA
-document.getElementById("result").innerHTML = "";
-if(window.myChart){
-    window.myChart.destroy();
-}
+document.getElementById("result").innerHTML = "<div class='loading'>⏳ Calculating...</div>";
+
+if(window.myChart) window.myChart.destroy();
 
 let source = `${city1.value} ${pin1.value} ${state1.value} ${country1.value}`;
 let dest = `${city2.value} ${pin2.value} ${state2.value} ${country2.value}`;
 
-let s = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`);
-let sData = await s.json();
+try{
 
-let d = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${dest}`);
-let dData = await d.json();
+// 🔥 PARALLEL FETCH
+let [sData, dData] = await Promise.all([
+fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${source}`).then(r=>r.json()),
+fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${dest}`).then(r=>r.json())
+]);
 
 let sLat = +sData[0].lat;
 let sLon = +sData[0].lon;
 let dLat = +dData[0].lat;
 let dLon = +dData[0].lon;
 
-// MAP CLEAN
+// MAP UPDATE FAST
 map.eachLayer(l=>{
 if(l instanceof L.Marker || l instanceof L.Polyline){
 map.removeLayer(l);
@@ -145,19 +147,19 @@ map.removeLayer(l);
 L.marker([sLat,sLon]).addTo(map);
 L.marker([dLat,dLon]).addTo(map);
 
-let route = await fetch(`https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=full&geometries=geojson`);
-let data = await route.json();
+// ROUTE + STATION PARALLEL
+let [routeData, srcStation, dstStation] = await Promise.all([
+fetch(`https://router.project-osrm.org/route/v1/driving/${sLon},${sLat};${dLon},${dLat}?overview=full&geometries=geojson`).then(r=>r.json()),
+getStation(sLat,sLon),
+getStation(dLat,dLon)
+]);
 
-let coords = data.routes[0].geometry.coordinates;
+let coords = routeData.routes[0].geometry.coordinates;
 let line = L.polyline(coords.map(c=>[c[1],c[0]]),{color:'cyan'}).addTo(map);
 map.fitBounds(line.getBounds());
 
 // DISTANCE
 let distance = getDistance(sLat,sLon,dLat,dLon);
-
-// STATIONS
-let srcStation = await getStation(sLat,sLon);
-let dstStation = await getStation(dLat,dLon);
 
 // TRAFFIC
 let hour=new Date().getHours();
@@ -166,46 +168,38 @@ let traffic=(hour>=8&&hour<=11)||(hour>=17&&hour<=21)?1.4:1;
 // OPTIONS
 let options=[];
 
-// 🚗 CAR
+// CAR
 let carD=distance*1.3;
 let carT=(carD/45)*60*traffic;
-if(carT<25) carT=25;
 let carC=(carD*18)+100;
 options.push({name:"🚗 Car",d:carD,t:carT,c:carC});
 
-// 🚆 TRAIN
+// TRAIN
 let trainD=distance*1.1;
 let trainT=(trainD/50)*60+20;
 if(trainD<80) trainT=60;
-let trainC=trainD<80 ? 15 : 50+(trainD*0.3);
+let trainC=trainD<80?15:50+(trainD*0.3);
 options.push({name:"🚆 Train",d:trainD,t:trainT,c:trainC});
 
-// ✈️ FLIGHT ALWAYS SHOWN
-let flightAvailable = distance > 200;
-let flightData=null;
-
-if(flightAvailable){
+// FLIGHT
+if(distance>200){
 let flightT=(distance/600)*60+90;
 let flightC=2000+(distance*4);
-flightData={name:"✈️ Flight",d:distance,t:flightT,c:flightC};
-options.push(flightData);
+options.push({name:"✈️ Flight",d:distance,t:flightT,c:flightC});
 }
 
-// BEST LOGIC
-let cheapest = Math.min(...options.map(o=>o.c));
-let fastest = Math.min(...options.map(o=>o.t));
+// BEST
+let cheapest=Math.min(...options.map(o=>o.c));
+let fastest=Math.min(...options.map(o=>o.t));
 
-let html = `<div class="card">
-🚉 Stations:<br>
-${srcStation} → ${dstStation}
-</div>`;
+let html = `<div class="card">🚉 ${srcStation} → ${dstStation}</div>`;
 
-let labels=[], costs=[], times=[];
+let labels=[],costs=[],times=[];
 
 options.forEach(o=>{
 let badge="";
-if(o.c===cheapest) badge+=`<span class="badge cheapest">Cheapest</span>`;
-if(o.t===fastest) badge+=`<span class="badge fastest">Fastest</span>`;
+if(o.c===cheapest) badge+="<span class='badge cheapest'>Cheapest</span>";
+if(o.t===fastest) badge+="<span class='badge fastest'>Fastest</span>";
 
 html+=`<div class="card">
 ${o.name} ${badge}<br>
@@ -219,12 +213,9 @@ costs.push(o.c);
 times.push(o.t);
 });
 
-// ALWAYS SHOW FLIGHT CARD
-if(!flightAvailable){
-html+=`<div class="card">
-✈️ Flight<br>
-❌ Not Available for short distance
-</div>`;
+// ALWAYS FLIGHT BOX
+if(distance<=200){
+html+=`<div class="card">✈️ Flight<br>❌ Not Available</div>`;
 }
 
 document.getElementById("result").innerHTML=html;
@@ -235,14 +226,17 @@ type:'bar',
 data:{
 labels:labels,
 datasets:[
-{label:'Average Cost ₹',data:costs,backgroundColor:'blue'},
+{label:'Avg Cost ₹',data:costs,backgroundColor:'blue'},
 {label:'Time (mins)',data:times,backgroundColor:'green'}
 ]
 }
 });
 
+}catch{
+document.getElementById("result").innerHTML="❌ Failed to load data";
 }
 
+}
 </script>
 
 </body>
